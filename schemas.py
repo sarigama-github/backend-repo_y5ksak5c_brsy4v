@@ -1,48 +1,50 @@
 """
-Database Schemas
+Database Schemas for Religious Education App
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
-
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+Each Pydantic model represents a collection in MongoDB. The collection name
+is the lowercase class name.
 """
 
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
-# Example schemas (replace with your own):
 
-class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
+class Material(BaseModel):
+    """Collection: material"""
+    title: str = Field(..., description="Judul materi")
+    content: str = Field(..., description="Isi materi (teks panjang)")
+    category: Optional[str] = Field(None, description="Kategori materi")
+    thumbnail_url: Optional[str] = Field(None, description="URL thumbnail (opsional)")
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
 
-# Add your own schemas here:
-# --------------------------------------------------
+class Video(BaseModel):
+    """Collection: video"""
+    title: str = Field(..., description="Judul video")
+    url: str = Field(..., description="URL video YouTube/Vimeo/MP4")
+    description: Optional[str] = Field(None, description="Deskripsi singkat")
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+
+class Photo(BaseModel):
+    """Collection: photo"""
+    title: str = Field(..., description="Judul foto")
+    image_url: str = Field(..., description="URL gambar")
+    caption: Optional[str] = Field(None, description="Keterangan foto")
+
+
+class Quiz(BaseModel):
+    """Collection: quiz"""
+    title: str = Field(..., description="Judul kuis")
+    description: Optional[str] = Field(None, description="Deskripsi kuis")
+
+
+class Question(BaseModel):
+    """Collection: question"""
+    quiz_id: str = Field(..., description="ID kuis terkait (string ObjectId)")
+    text: str = Field(..., description="Teks pertanyaan")
+    options: List[str] = Field(..., min_items=2, description="Pilihan jawaban")
+    correct_index: int = Field(..., ge=0, description="Index jawaban benar dalam options")
+
+
+class Submission(BaseModel):
+    """Body untuk submit jawaban kuis"""
+    answers: List[int] = Field(..., description="Daftar index jawaban untuk tiap pertanyaan berurutan")
