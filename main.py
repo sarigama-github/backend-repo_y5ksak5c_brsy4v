@@ -1,6 +1,6 @@
 import os
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from bson import ObjectId
@@ -17,6 +17,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "secret-admin-token")
 
 
 # -------- Root & Health --------
@@ -53,6 +56,27 @@ def test_database():
     return response
 
 
+# -------- Auth --------
+class LoginBody(BaseModel):
+    password: str
+
+
+def require_admin(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    token = authorization.split(" ", 1)[1]
+    if token != ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return True
+
+
+@app.post("/auth/login")
+def login(body: LoginBody):
+    if body.password != ADMIN_PASSWORD:
+        raise HTTPException(status_code=401, detail="Password salah")
+    return {"token": ADMIN_TOKEN}
+
+
 # -------- Helpers --------
 class IdModel(BaseModel):
     id: str
@@ -67,7 +91,7 @@ def to_object_id(id_str: str) -> ObjectId:
 
 # -------- Materials --------
 @app.post("/materials")
-def create_material(material: Material):
+def create_material(material: Material, _: bool = Depends(require_admin)):
     inserted_id = create_document("material", material)
     return {"id": inserted_id}
 
@@ -80,9 +104,18 @@ def list_materials(limit: Optional[int] = 50):
     return docs
 
 
+@app.put("/materials/{material_id}")
+def update_material(material_id: str, material: Material, _: bool = Depends(require_admin)):
+    mid = to_object_id(material_id)
+    res = db["material"].update_one({"_id": mid}, {"$set": material.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Materi tidak ditemukan")
+    return {"updated": True}
+
+
 # -------- Videos --------
 @app.post("/videos")
-def create_video(video: Video):
+def create_video(video: Video, _: bool = Depends(require_admin)):
     inserted_id = create_document("video", video)
     return {"id": inserted_id}
 
@@ -97,7 +130,7 @@ def list_videos(limit: Optional[int] = 50):
 
 # -------- Photos --------
 @app.post("/photos")
-def create_photo(photo: Photo):
+def create_photo(photo: Photo, _: bool = Depends(require_admin)):
     inserted_id = create_document("photo", photo)
     return {"id": inserted_id}
 
@@ -112,7 +145,7 @@ def list_photos(limit: Optional[int] = 50):
 
 # -------- Quizzes & Questions --------
 @app.post("/quizzes")
-def create_quiz(quiz: Quiz):
+def create_quiz(quiz: Quiz, _: bool = Depends(require_admin)):
     inserted_id = create_document("quiz", quiz)
     return {"id": inserted_id}
 
@@ -125,8 +158,17 @@ def list_quizzes(limit: Optional[int] = 50):
     return docs
 
 
+@app.put("/quizzes/{quiz_id}")
+def update_quiz(quiz_id: str, quiz: Quiz, _: bool = Depends(require_admin)):
+    qid = to_object_id(quiz_id)
+    res = db["quiz"].update_one({"_id": qid}, {"$set": quiz.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Kuis tidak ditemukan")
+    return {"updated": True}
+
+
 @app.post("/questions")
-def create_question(question: Question):
+def create_question(question: Question, _: bool = Depends(require_admin)):
     # validate quiz id format
     _ = to_object_id(question.quiz_id)
     inserted_id = create_document("question", question)
@@ -135,11 +177,20 @@ def create_question(question: Question):
 
 @app.get("/quizzes/{quiz_id}/questions")
 def list_questions(quiz_id: str):
-    qid = to_object_id(quiz_id)
+    _ = to_object_id(quiz_id)
     docs = get_documents("question", {"quiz_id": quiz_id})
     for d in docs:
         d["id"] = str(d.pop("_id"))
     return docs
+
+
+@app.put("/questions/{question_id}")
+def update_question(question_id: str, question: Question, _: bool = Depends(require_admin)):
+    qoid = to_object_id(question_id)
+    res = db["question"].update_one({"_id": qoid}, {"$set": question.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Pertanyaan tidak ditemukan")
+    return {"updated": True}
 
 
 @app.post("/quizzes/{quiz_id}/submit")
